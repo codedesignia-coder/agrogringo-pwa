@@ -5,13 +5,13 @@
  */
 export const uploadToCloudinary = async (file) => {
   // ¡IMPORTANTE! Reemplaza estos valores con los de tu cuenta de Cloudinary.
-  const CLOUD_NAME = "dctye2tfk"; // Este es tu Cloud Name. ¡Correcto!
-  const UPLOAD_PRESET = "agrogringo_unsigned_uploads"; // Este es tu Upload Preset. ¡Correcto!
+  const CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
+  const UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
 
   // Verificación para ayudar a depurar.
-  if (CLOUD_NAME === "tu_cloud_name" || UPLOAD_PRESET === "tu_upload_preset") {
+  if (!CLOUD_NAME || !UPLOAD_PRESET) {
     const errorMessage =
-      "Las credenciales de Cloudinary no están configuradas en 'src/services/cloudinaryUploader.js'. Reemplaza 'tu_cloud_name' y 'tu_upload_preset'.";
+      "Las variables de entorno VITE_CLOUDINARY_CLOUD_NAME o VITE_CLOUDINARY_UPLOAD_PRESET no están configuradas.";
     console.error(errorMessage);
     // Lanzamos un error que se mostrará en el toast.
     throw new Error("Configuración de Cloudinary incompleta.");
