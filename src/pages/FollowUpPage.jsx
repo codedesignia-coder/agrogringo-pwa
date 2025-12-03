@@ -72,6 +72,9 @@ export function FollowUpPage() {
                 const compressedBlob = await compressImage(originalFile);
                 const imageUrl = await uploadToCloudinary(compressedBlob);
                 updates.seguimiento.fotoDespues = imageUrl;
+            } else {
+                // Asegurarnos de que fotoDespues no sea undefined si no se sube una nueva imagen.
+                updates.seguimiento.fotoDespues = recommendation.seguimiento?.fotoDespues || null;
             }
 
             await updateRecommendation(id, updates);

@@ -1,6 +1,15 @@
 import { db } from "@/services/database/dexieConfig";
 import { v4 as uuidv4 } from "uuid";
 import { putClient } from "./clients";
+import {
+  collection,
+  query,
+  where,
+  orderBy,
+  onSnapshot,
+} from "firebase/firestore";
+import { db as firestoreDB } from "@/firebase/config"; // Asegúrate que la ruta a tu config de firebase es correcta
+import toast from "react-hot-toast";
 
 /**
  * Crea una nueva recomendación.
@@ -193,4 +202,50 @@ export const deleteRecommendation = async (id) => {
  */
 export const clearLocalDatabase = async () => {
   return await db.recommendations.clear();
+};
+
+/**
+ * Se suscribe a las actualizaciones en tiempo real de las recomendaciones de un usuario desde Firestore.
+ *
+ * @param {string} userId - El ID del usuario técnico.
+ * @param {function} callback - Una función que se llamará cada vez que los datos cambien.
+ *                              Recibirá un array de recomendaciones como argumento.
+ * @returns {function} Una función para cancelar la suscripción (unsubscribe).
+ */
+export const onRecommendationsUpdate = (userId, callback) => {
+  if (!userId) {
+    // Devuelve una función vacía si no hay usuario para evitar errores.
+    return () => {};
+  }
+
+  const recommendationsRef = collection(firestoreDB, "recommendations");
+  // La consulta ahora debe buscar por 'userId' en lugar de 'tecnicoId' para ser consistente
+  const q = query(
+    recommendationsRef,
+    where("userId", "==", userId),
+    orderBy("fecha", "desc")
+  );
+
+  // onSnapshot establece la escucha en tiempo real.
+  const unsubscribe = onSnapshot(
+    q,
+    (querySnapshot) => {
+      const recommendationsData = querySnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+        // Aseguramos que la fecha sea un objeto Date de JS para consistencia
+        fecha: doc.data().fecha.toDate(),
+      }));
+      // Llama a la función callback con los datos actualizados.
+      callback(recommendationsData);
+    },
+    (error) => {
+      // Manejo de errores de la escucha
+      console.error("Error en la suscripción a las recomendaciones:", error);
+      toast.error("No se pudo conectar para recibir actualizaciones en vivo.");
+    }
+  );
+
+  // Devuelve la función para poder detener la escucha cuando el componente se desmonte.
+  return unsubscribe;
 };

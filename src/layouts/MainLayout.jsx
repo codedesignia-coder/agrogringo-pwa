@@ -1,9 +1,21 @@
 //Creamos la estructura Base que se repetira en toda las paginas
 import { Outlet } from 'react-router-dom';
+import { useEffect } from 'react';
 import { Navbar } from '@/components/Navbar';
 import { BottomNavbar } from '@/components/BottomNavbar';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
+import { runSync } from '@/services/syncManager';
 
 export function MainLayout() {
+    const isOnline = useOnlineStatus();
+
+    useEffect(() => {
+        if (isOnline) {
+            console.log('Conexión detectada. Intentando sincronizar...');
+            runSync();
+        }
+    }, [isOnline]);
+
     return (
         <div className="min-h-screen bg-gray-100">
             {/* --- Sidebar para LG y superior --- */}

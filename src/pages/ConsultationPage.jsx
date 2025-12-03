@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { getAllRecommendations, deleteRecommendation } from '@/services/api/recommendations';
+import { onRecommendationsUpdate, deleteRecommendation } from '@/services/api/recommendations'; // CAMBIO: Importamos la nueva función
 import { useAuth } from '@/hooks/useAuth'; // Asegúrate de que la ruta sea correcta
 import toast from 'react-hot-toast';
 import { ChevronDownIcon, FunnelIcon } from '@heroicons/react/24/solid'; // Necesitarás instalar @heroicons/react
@@ -10,11 +10,11 @@ import logo from '@/assets/logo_agrogringo.jpeg'; // Importamos el logo
 import { exportToExcel } from '@/services/excelExporter'; // ¡Importamos el nuevo exportador!
 
 export function ConsultationPage() {
+    const [allRecommendations, setAllRecommendations] = useState([]); // NUEVO: Estado para guardar TODOS los datos
     const [filteredData, setFilteredData] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const { user } = useAuth();
-    const initialLoadDone = useRef(false); // 1. Añadimos una referencia para controlar la carga inicial.
 
     // NUEVO: id de la recomendación seleccionada para exportar
     const [selectedRecId, setSelectedRecId] = useState(null);
@@ -27,12 +27,6 @@ export function ConsultationPage() {
     const [dateToFilter, setDateToFilter] = useState('');
     const [showFilters, setShowFilters] = useState(false); // Estado para mostrar/ocultar filtros en móvil
 
-    // Estados para paginación
-    const [page, setPage] = useState(1);
-    const [hasMore, setHasMore] = useState(true);
-    const [totalCount, setTotalCount] = useState(0);
-    const [isLoadingMore, setIsLoadingMore] = useState(false);
-
     // Estilos para los estados, para mantener consistencia
     const estadoStyles = {
         'Pendiente': 'bg-yellow-100 text-yellow-800',
@@ -40,82 +34,108 @@ export function ConsultationPage() {
         'Finalizado': 'bg-green-100 text-green-800',
     };
 
-    const fetchRecommendations = async (currentPage, currentFilters, loadMore = false) => {
+    // Efecto para la suscripción en tiempo real
+    useEffect(() => {
         if (!user) return;
 
-        if (loadMore) {
-            setIsLoadingMore(true);
-        } else {
-            setLoading(true);
-        }
-
-        try {
-            const { data, total } = await getAllRecommendations(user.uid, currentPage, 15, currentFilters);
-
-            if (loadMore) {
-                setFilteredData(prevData => [...prevData, ...data]);
-            } else {
-                setFilteredData(data);
-                setTotalCount(total);
-            }
-
-            setHasMore(currentPage * 15 < total);
-
-        } catch (err) {
-            setError('No se pudieron cargar las recomendaciones.');
-            console.error(err);
-        } finally {
+        setLoading(true);
+        // onRecommendationsUpdate nos devuelve una función para "desuscribirnos"
+        const unsubscribe = onRecommendationsUpdate(user.uid, (recommendations) => {
+            setAllRecommendations(recommendations); // Guardamos la lista completa
+            setFilteredData(recommendations); // Inicialmente, los datos filtrados son todos los datos
             setLoading(false);
-            setIsLoadingMore(false);
-        }
-    };
+        });
 
-    useEffect(() => {
-        // 2. Usamos la referencia para asegurarnos de que la carga inicial solo se ejecute una vez.
-        // Esto soluciona el problema del doble `useEffect` en StrictMode.
-        if (!initialLoadDone.current) {
-            initialLoadDone.current = true;
-            // Carga inicial
-            fetchRecommendations(1, {});
-        }
+        // La función de limpieza de useEffect se encarga de llamar a unsubscribe
+        // cuando el componente se desmonta. Esto es CRUCIAL para evitar fugas de memoria.
+        return () => unsubscribe();
     }, [user]);
 
-    const applyFilters = () => {
-        setPage(1); // Reseteamos la página a 1
-        const filters = { client: clientFilter, status: statusFilter, dateFrom: dateFromFilter, dateTo: dateToFilter };
-        fetchRecommendations(1, filters);
-    };
+    useEffect(() => {
+        // Efecto para aplicar los filtros cuando cambian los filtros o la lista maestra
+        const applyFilters = () => {
+            let data = [...allRecommendations];
 
-    const clearFilters = () => {
+            if (clientFilter) {
+                data = data.filter(rec =>
+                    rec.datosAgricultor.nombre.toLowerCase().includes(clientFilter.toLowerCase()) ||
+                    rec.datosAgricultor.dni.includes(clientFilter)
+                );
+            }
+            if (statusFilter) {
+                data = data.filter(rec => rec.estado === statusFilter);
+            }
+            if (dateFromFilter) {
+                data = data.filter(rec => new Date(rec.fecha) >= new Date(dateFromFilter));
+            }
+            if (dateToFilter) {
+                // Añadimos 1 día a la fecha "hasta" para incluir todo el día
+                const toDate = new Date(dateToFilter);
+                toDate.setDate(toDate.getDate() + 1);
+                data = data.filter(rec => new Date(rec.fecha) < toDate);
+            }
+            setFilteredData(data);
+        };
+        applyFilters();
+    }, [clientFilter, statusFilter, dateFromFilter, dateToFilter, allRecommendations]);
+
+    const handleClearFilters = () => {
         setClientFilter('');
         setStatusFilter('');
         setDateFromFilter('');
         setDateToFilter('');
-        setPage(1);
-        fetchRecommendations(1, {}); // Volvemos a cargar sin filtros
-    };
-
-    const loadMore = () => {
-        const nextPage = page + 1;
-        setPage(nextPage);
-        const filters = { client: clientFilter, status: statusFilter, dateFrom: dateFromFilter, dateTo: dateToFilter };
-        fetchRecommendations(nextPage, filters, true);
     };
 
     const handleDelete = async (id, nombreCliente) => {
-        if (window.confirm(`¿Estás seguro de que quieres eliminar la recomendación para "${nombreCliente}"? Esta acción no se puede deshacer.`)) {
-            try {
-                await deleteRecommendation(id);
-                // Actualizar el estado para reflejar la eliminación en la UI
-                setFilteredData(prev => prev.filter(rec => rec.id !== id));
-                setTotalCount(prev => prev - 1);
-                // Si se eliminó la recomendación seleccionada, limpiar selección
-                if (selectedRecId === id) setSelectedRecId(null);
-                toast.success('Recomendación eliminada con éxito.');
-            } catch (err) {
-                toast.error('Error al eliminar la recomendación.');
-                console.error(err);
-            }
+        if (!window.confirm(`¿Estás seguro de que quieres eliminar la recomendación para "${nombreCliente}"? Esta acción no se puede deshacer.`)) {
+            return;
+        }
+
+        const toastId = toast.loading('Iniciando eliminación...');
+
+        try {
+            // 1. Obtener la recomendación para saber qué imágenes borrar.
+            const recToDelete = allRecommendations.find(rec => rec.id === id);
+            if (!recToDelete) throw new Error('No se encontró la recomendación para eliminar.');
+
+            // 2. Función para llamar a nuestra Netlify Function y borrar una imagen.
+            const deleteImage = async (imageUrl) => {
+                if (!imageUrl) return; // Si no hay URL, no hacemos nada.
+
+                // Extraemos el public_id de la URL de Cloudinary.
+                const publicId = imageUrl.split('/').pop().split('.')[0];
+                const folder = imageUrl.split('/')[imageUrl.split('/').length - 2];
+                const fullPublicId = `${folder}/${publicId}`;
+
+                // La URL de la función en Netlify es relativa a la raíz del sitio.
+                const response = await fetch('/.netlify/functions/delete-cloudinary-image', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ publicId: fullPublicId }),
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    console.warn(`No se pudo eliminar la imagen ${fullPublicId}:`, errorData.message);
+                }
+            };
+
+            // 3. Borrar ambas imágenes (si existen).
+            toast.loading('Eliminando imágenes de la nube...', { id: toastId });
+            await Promise.all([
+                deleteImage(recToDelete.seguimiento?.fotoAntes),
+                deleteImage(recToDelete.seguimiento?.fotoDespues),
+            ]);
+
+            // 4. Borrar el registro de la base de datos (local y luego se sincroniza).
+            toast.loading('Eliminando registro de la base de datos...', { id: toastId });
+            await deleteRecommendation(id);
+
+            toast.success('Recomendación eliminada con éxito.', { id: toastId });
+
+        } catch (error) {
+            console.error('Error en el proceso de eliminación:', error);
+            toast.error(`Error al eliminar: ${error.message}`, { id: toastId });
         }
     };
 
@@ -270,10 +290,7 @@ export function ConsultationPage() {
                         `}</style>
                         </div>
                         <div className="flex justify-center gap-4 mt-6">
-                            <button onClick={applyFilters} className="btn-filter bg-gradient-to-r from-green-600 to-green-800 text-white font-bold py-2 px-6 rounded-lg flex items-center gap-2">
-                                🔍 Aplicar Filtros
-                            </button>
-                            <button onClick={clearFilters} className="btn-clear-filters bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-6 rounded-lg">
+                            <button onClick={handleClearFilters} className="btn-clear-filters bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-6 rounded-lg">
                                 🗑️ Limpiar
                             </button>
                         </div>
@@ -286,7 +303,7 @@ export function ConsultationPage() {
                 <div className="results-header mb-4 flex justify-between items-center">
                     <h2 className="text-xl font-bold text-gray-700">Resultados</h2>
                     <div className="results-count font-semibold text-gray-600">
-                        Mostrando <strong>{filteredData.length}</strong> de <strong>{totalCount}</strong>
+                        <strong>{filteredData.length}</strong> {filteredData.length === 1 ? 'resultado' : 'resultados'}
                     </div>
                 </div>
 
@@ -374,18 +391,6 @@ export function ConsultationPage() {
                     )}
                 </div>
 
-                {/* BOTÓN CARGAR MÁS */}
-                {hasMore && (
-                    <div className="mt-6 text-center">
-                        <button
-                            onClick={loadMore}
-                            disabled={isLoadingMore}
-                            className="bg-white text-green-700 font-bold py-2 px-6 rounded-full border-2 border-green-700 hover:bg-green-700 hover:text-white transition disabled:bg-gray-200 disabled:text-gray-400 disabled:border-gray-300"
-                        >
-                            {isLoadingMore ? 'Cargando...' : 'Cargar Más'}
-                        </button>
-                    </div>
-                )}
             </div>
         </div>
     );

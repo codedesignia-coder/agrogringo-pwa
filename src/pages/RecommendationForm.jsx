@@ -118,6 +118,10 @@ export function RecommendationForm() {
                     // Si no se seleccionó archivo, asegúrate de que sea null
                     data.seguimiento.fotoAntes = null;
                 }
+                // ¡LA SOLUCIÓN! Aseguramos que fotoDespues sea null en la creación.
+                // Firestore no acepta 'undefined', que es lo que podría estar enviando el formulario.
+                data.seguimiento.fotoDespues = null;
+
                 // Guardar la recomendación con la imagen ya convertida
                 await createRecommendation(data, user.uid);
 
