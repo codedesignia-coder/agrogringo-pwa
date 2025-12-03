@@ -8,6 +8,7 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import toast from "react-hot-toast";
+import { deleteCloudinaryImage } from "./imageDeletionService"; // 1. Importamos el servicio de eliminación
 
 /**
  * Función de limpieza recursiva.
@@ -95,6 +96,26 @@ export const runSync = async () => {
         await createFirestoreRecommendation(rec); // setDoc maneja creación y sobreescritura
         await db.recommendations.update(rec.id, { syncStatus: "synced" });
       } else if (rec.syncStatus === "deleted") {
+        // Antes de eliminar de Firestore, intentamos eliminar las imágenes de Cloudinary
+        const imagesToDelete = [
+          rec.imageUrl,
+          rec.seguimiento?.fotoAntes,
+          rec.seguimiento?.fotoDespues,
+        ].filter(Boolean);
+
+        for (const imageUrl of imagesToDelete) {
+          try {
+            await deleteCloudinaryImage(imageUrl);
+            console.log(
+              `Imagen ${imageUrl} de Cloudinary eliminada para rec.id: ${rec.id}`
+            );
+          } catch (imageDeleteError) {
+            // Si la eliminación de la imagen falla, solo advertimos en la consola pero no detenemos el proceso.
+            console.warn(
+              `No se pudo eliminar la imagen ${imageUrl} de Cloudinary para rec.id: ${rec.id}. Error: ${imageDeleteError.message}`
+            );
+          }
+        }
         await deleteFirestoreRecommendation(rec.id);
         await db.recommendations.delete(rec.id); // Eliminamos el registro local permanentemente
       }

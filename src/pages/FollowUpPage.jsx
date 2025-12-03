@@ -5,6 +5,7 @@ import { getRecommendationById, updateRecommendation } from '@/services/api/reco
 import { compressImage } from '@/utils/imageCompressor';
 import toast from 'react-hot-toast';
 import { uploadToCloudinary } from '@/services/cloudinaryUploader';
+import { deleteCloudinaryImage } from '@/services/imageDeletionService'; // 1. Importamos el servicio de eliminación
 
 const fasesTratamiento = ['Siembra', 'Vegetativo', 'Floración', 'Producción', 'Postcosecha', 'Cosecha', 'Otro'];
 
@@ -55,6 +56,8 @@ export function FollowUpPage() {
     }, [id, setValue]);
 
     const onSubmit = async (data) => {
+        let oldImageUrlToDelete = null; // Variable para guardar la URL de la imagen vieja
+
         try {
             const updates = {
                 estado: data.estado,
@@ -69,8 +72,16 @@ export function FollowUpPage() {
             if (data.seguimiento.fotoDespues && data.seguimiento.fotoDespues.length > 0) {
                 const originalFile = data.seguimiento.fotoDespues[0];
 
+                // 2. Guardamos la URL de la imagen vieja para borrarla DESPUÉS
+                if (recommendation.seguimiento?.fotoDespues) {
+                    oldImageUrlToDelete = recommendation.seguimiento.fotoDespues;
+                }
+
+                const toastId = toast.loading('Subiendo nueva imagen...', { id: 'uploading' });
                 const compressedBlob = await compressImage(originalFile);
                 const imageUrl = await uploadToCloudinary(compressedBlob);
+                toast.dismiss('uploading');
+
                 updates.seguimiento.fotoDespues = imageUrl;
             } else {
                 // Asegurarnos de que fotoDespues no sea undefined si no se sube una nueva imagen.
@@ -79,6 +90,18 @@ export function FollowUpPage() {
 
             await updateRecommendation(id, updates);
             toast.success('Seguimiento guardado con éxito.');
+
+            // 3. Si todo salió bien y hay una imagen vieja, la eliminamos
+            if (oldImageUrlToDelete) {
+                try {
+                    await deleteCloudinaryImage(oldImageUrlToDelete);
+                    console.log('Imagen antigua eliminada de Cloudinary exitosamente.');
+                } catch (deleteError) {
+                    console.warn('No se pudo eliminar la imagen antigua de Cloudinary:', deleteError);
+                    toast.error('No se pudo eliminar la imagen antigua, pero el seguimiento se guardó.');
+                }
+            }
+
             navigate('/'); // Volver a la lista
         } catch (err) {
             toast.error('Error al guardar el seguimiento.');
