@@ -56,6 +56,18 @@ export const getRecommendationById = async (id) => {
 };
 
 /**
+ * Obtiene la última recomendación para determinar el siguiente número de hoja.
+ * @returns {Promise<object|null>} La última recomendación encontrada o null si no hay ninguna.
+ */
+export const getLastRecommendation = async () => {
+  // Ordena las recomendaciones por fecha en orden descendente y devuelve la primera.
+  // Esto nos da el registro más reciente.
+  const lastRec = await db.recommendations.orderBy("fecha").reverse().first();
+  console.log("Última recomendación encontrada en Dexie:", lastRec);
+  return lastRec;
+};
+
+/**
  * Crea una nueva recomendación en la base de datos local (Dexie).
  * @param {object} recommendationData Los datos de la nueva recomendación.
  * @returns {Promise<string>} El ID de la recomendación creada.
