@@ -123,6 +123,9 @@ export function RecommendationForm() {
                 // Firestore no acepta 'undefined', que es lo que podría estar enviando el formulario.
                 data.seguimiento.fotoDespues = null;
 
+                // ¡LA SOLUCIÓN! Añadimos el ID del técnico para que la consulta funcione.
+                data.tecnicoId = user.uid;
+
                 // Guardar la recomendación con la imagen ya convertida
                 await createRecommendation(data, user.uid);
 
