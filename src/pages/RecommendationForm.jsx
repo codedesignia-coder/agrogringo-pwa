@@ -54,6 +54,7 @@ export function RecommendationForm() {
     } = useForm({
         defaultValues: {
             noHoja: '',
+            fecha: new Date().toISOString(),
             datosAgricultor: {
                 nombre: '',
                 dni: '',
