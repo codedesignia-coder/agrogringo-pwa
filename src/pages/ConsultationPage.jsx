@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { onRecommendationsUpdate, deleteRecommendation, getLocalRecommendations } from '@/services/api/recommendations'; // CAMBIO: Importamos la nueva función
+import { onRecommendationsUpdate, deleteRecommendation } from '@/services/api/recommendations'; // CAMBIO: Importamos la nueva función
 import { useAuth } from '@/hooks/useAuth';
-import { useLiveQuery } from 'dexie-react-hooks'; // 1. Importamos el hook de Dexie para datos en tiempo real
 import toast from 'react-hot-toast';
 import { ChevronDownIcon, FunnelIcon } from '@heroicons/react/24/solid';
 import { Link } from 'react-router-dom';
@@ -14,7 +13,6 @@ export function ConsultationPage() {
     const [allRecommendations, setAllRecommendations] = useState([]); // NUEVO: Estado para guardar TODOS los datos
     const [filteredData, setFilteredData] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
     const { user } = useAuth();
 
     // NUEVO: id de la recomendación seleccionada para exportar
@@ -35,22 +33,20 @@ export function ConsultationPage() {
         'Finalizado': 'bg-green-100 text-green-800',
     };
 
-    // 2. Usamos useLiveQuery para obtener datos de Dexie en tiempo real
-    const localRecommendations = useLiveQuery(
-        () => getLocalRecommendations(user?.uid),
-        [user?.uid], // Dependencias: se vuelve a ejecutar si el user.uid cambia
-        [] // Valor inicial mientras se carga
-    );
-
-    // Efecto para la suscripción en tiempo real (ahora solo para sincronizar)
+    // Efecto para la suscripción en tiempo real
     useEffect(() => {
         if (!user) return;
 
         setLoading(true);
-        // Sincronizamos con Firebase, pero la UI ya no depende directamente de esto.
-        // onRecommendationsUpdate ahora debería actualizar Dexie, y useLiveQuery se encargará del resto.
-        const unsubscribe = onRecommendationsUpdate(user.uid, () => { /* La UI ya no necesita un callback aquí */ });
+        // onRecommendationsUpdate nos devuelve una función para "desuscribirnos"
+        const unsubscribe = onRecommendationsUpdate(user.uid, (recommendations) => {
+            setAllRecommendations(recommendations); // Guardamos la lista completa
+            setFilteredData(recommendations); // Inicialmente, los datos filtrados son todos los datos
+            setLoading(false);
+        });
 
+        // La función de limpieza de useEffect se encarga de llamar a unsubscribe
+        // cuando el componente se desmonta. Esto es CRUCIAL para evitar fugas de memoria.
         return () => unsubscribe();
     }, [user]);
 
@@ -80,13 +76,7 @@ export function ConsultationPage() {
             setFilteredData(data);
         };
         applyFilters();
-    }, [clientFilter, statusFilter, dateFromFilter, dateToFilter, allRecommendations]); // Mantenemos allRecommendations aquí
-
-    // 3. Efecto para actualizar los estados cuando los datos locales de Dexie cambian
-    useEffect(() => {
-        setAllRecommendations(localRecommendations);
-        setLoading(false); // Dejamos de cargar una vez que tenemos datos de Dexie
-    }, [localRecommendations]);
+    }, [clientFilter, statusFilter, dateFromFilter, dateToFilter, allRecommendations]);
 
     const handleClearFilters = () => {
         setClientFilter('');
@@ -109,30 +99,23 @@ export function ConsultationPage() {
 
             // 2. Función para llamar a nuestra Netlify Function y borrar una imagen.
             const deleteImage = async (imageUrl) => {
-                if (!imageUrl) return;
-                let fullPublicId = 'unknown';
-                try {
-                    // Extraemos el public_id de la URL de Cloudinary.
-                    const publicIdParts = imageUrl.split('/');
-                    const publicId = publicIdParts.pop().split('.')[0];
-                    const folder = publicIdParts[publicIdParts.length - 1];
-                    fullPublicId = `${folder}/${publicId}`;
+                if (!imageUrl) return; // Si no hay URL, no hacemos nada.
 
-                    // La URL de la función en Netlify es relativa a la raíz del sitio.
-                    const response = await fetch('/.netlify/functions/delete-cloudinary-image', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ publicId: fullPublicId }),
-                    });
+                // Extraemos el public_id de la URL de Cloudinary.
+                const publicId = imageUrl.split('/').pop().split('.')[0];
+                const folder = imageUrl.split('/')[imageUrl.split('/').length - 2];
+                const fullPublicId = `${folder}/${publicId}`;
 
-                    if (!response.ok) {
-                        const errorData = await response.json().catch(() => ({ message: 'La respuesta de error no es un JSON válido.' }));
-                        throw new Error(errorData.message || `Error del servidor: ${response.status}`);
-                    }
-                } catch (err) {
-                    console.warn(`No se pudo eliminar la imagen ${fullPublicId} (${imageUrl}):`, err);
-                    // Opcional: podrías decidir si relanzar el error o no.
-                    // Por ahora, solo lo advertimos para que la eliminación del registro principal no se detenga.
+                // La URL de la función en Netlify es relativa a la raíz del sitio.
+                const response = await fetch('/.netlify/functions/delete-cloudinary-image', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ publicId: fullPublicId }),
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    console.warn(`No se pudo eliminar la imagen ${fullPublicId}:`, errorData.message);
                 }
             };
 
@@ -217,7 +200,6 @@ export function ConsultationPage() {
     };
 
     if (loading) return <p className="p-4 text-center">Cargando recomendaciones...</p>;
-    if (error) return <p className="p-4 text-center text-red-500">{error}</p>;
 
     return (
         <div className="max-w-7xl mx-auto p-4">
