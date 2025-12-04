@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { onRecommendationsUpdate, deleteRecommendation } from '@/services/api/recommendations'; // CAMBIO: Importamos la nueva función
+import { onRecommendationsUpdate, deleteRecommendation, getLocalRecommendations } from '@/services/api/recommendations';
 import { useAuth } from '@/hooks/useAuth';
+import { useLiveQuery } from 'dexie-react-hooks';
 import toast from 'react-hot-toast';
 import { ChevronDownIcon, FunnelIcon } from '@heroicons/react/24/solid';
 import { Link } from 'react-router-dom';
@@ -13,7 +14,6 @@ export function ConsultationPage() {
     const [allRecommendations, setAllRecommendations] = useState([]); // NUEVO: Estado para guardar TODOS los datos
     const [filteredData, setFilteredData] = useState([]);
     const [loading, setLoading] = useState(true);
-    const { user } = useAuth();
 
     // NUEVO: id de la recomendación seleccionada para exportar
     const [selectedRecId, setSelectedRecId] = useState(null);
@@ -26,6 +26,14 @@ export function ConsultationPage() {
     const [dateToFilter, setDateToFilter] = useState('');
     const [showFilters, setShowFilters] = useState(false); // Estado para mostrar/ocultar filtros en móvil
 
+    const { user } = useAuth();
+
+    // 1. Usamos useLiveQuery para obtener datos de Dexie en tiempo real.
+    const localRecommendations = useLiveQuery(
+        () => getLocalRecommendations(user?.uid),
+        [user?.uid] // Dependencias: se vuelve a ejecutar si el user.uid cambia
+    );
+
     // Estilos para los estados, para mantener consistencia
     const estadoStyles = {
         'Pendiente': 'bg-yellow-100 text-yellow-800',
@@ -33,22 +41,23 @@ export function ConsultationPage() {
         'Finalizado': 'bg-green-100 text-green-800',
     };
 
-    // Efecto para la suscripción en tiempo real
+    // 2. Este efecto ahora solo se encarga de la sincronización en segundo plano.
     useEffect(() => {
         if (!user) return;
 
-        setLoading(true);
-        // onRecommendationsUpdate nos devuelve una función para "desuscribirnos"
-        const unsubscribe = onRecommendationsUpdate(user.uid, (recommendations) => {
-            setAllRecommendations(recommendations); // Guardamos la lista completa
-            setFilteredData(recommendations); // Inicialmente, los datos filtrados son todos los datos
-            setLoading(false);
-        });
+        // onRecommendationsUpdate ahora actualiza Dexie, y useLiveQuery se encarga del resto.
+        const unsubscribe = onRecommendationsUpdate(user.uid, null); // Ya no necesitamos el callback para la UI.
 
-        // La función de limpieza de useEffect se encarga de llamar a unsubscribe
-        // cuando el componente se desmonta. Esto es CRUCIAL para evitar fugas de memoria.
         return () => unsubscribe();
     }, [user]);
+
+    // 3. Este efecto reacciona a los cambios de la base de datos local.
+    useEffect(() => {
+        if (localRecommendations) {
+            setAllRecommendations(localRecommendations);
+            setLoading(false);
+        }
+    }, [localRecommendations]);
 
     useEffect(() => {
         // Efecto para aplicar los filtros cuando cambian los filtros o la lista maestra
@@ -99,23 +108,30 @@ export function ConsultationPage() {
 
             // 2. Función para llamar a nuestra Netlify Function y borrar una imagen.
             const deleteImage = async (imageUrl) => {
-                if (!imageUrl) return; // Si no hay URL, no hacemos nada.
+                if (!imageUrl) return;
+                let fullPublicId = 'unknown';
+                try {
+                    // Extraemos el public_id de la URL de Cloudinary.
+                    const publicIdParts = imageUrl.split('/');
+                    const publicId = publicIdParts.pop().split('.')[0];
+                    const folder = publicIdParts[publicIdParts.length - 1];
+                    fullPublicId = `${folder}/${publicId}`;
 
-                // Extraemos el public_id de la URL de Cloudinary.
-                const publicId = imageUrl.split('/').pop().split('.')[0];
-                const folder = imageUrl.split('/')[imageUrl.split('/').length - 2];
-                const fullPublicId = `${folder}/${publicId}`;
+                    // La URL de la función en Netlify es relativa a la raíz del sitio.
+                    const response = await fetch('/.netlify/functions/delete-cloudinary-image', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ publicId: fullPublicId }),
+                    });
 
-                // La URL de la función en Netlify es relativa a la raíz del sitio.
-                const response = await fetch('/.netlify/functions/delete-cloudinary-image', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ publicId: fullPublicId }),
-                });
-
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    console.warn(`No se pudo eliminar la imagen ${fullPublicId}:`, errorData.message);
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({ message: 'La respuesta de error no es un JSON válido.' }));
+                        throw new Error(errorData.message || `Error del servidor: ${response.status}`);
+                    }
+                } catch (err) {
+                    console.warn(`No se pudo eliminar la imagen ${fullPublicId} (${imageUrl}):`, err);
+                    // Opcional: podrías decidir si relanzar el error o no.
+                    // Por ahora, solo lo advertimos para que la eliminación del registro principal no se detenga.
                 }
             };
 

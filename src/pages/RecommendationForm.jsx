@@ -123,6 +123,9 @@ export function RecommendationForm() {
                 // Firestore no acepta 'undefined', que es lo que podría estar enviando el formulario.
                 data.seguimiento.fotoDespues = null;
 
+                // La función createRecommendation se encargará de añadir el userId.
+                // No es necesario añadirlo manualmente aquí si se pasa como argumento.
+
                 // Guardar la recomendación con la imagen ya convertida
                 await createRecommendation(data, user.uid);
 
