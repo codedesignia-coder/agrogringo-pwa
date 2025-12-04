@@ -127,7 +127,7 @@ export function RecommendationForm() {
                 data.tecnicoId = user.uid;
 
                 // Guardar la recomendación con la imagen ya convertida
-                await createRecommendation(data);
+                await createRecommendation(data, user.uid);
 
                 toast.success('Recomendación guardada con éxito!');
                 navigate('/'); // Volver a la lista
