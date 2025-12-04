@@ -1,6 +1,13 @@
 import { db } from "../database/dexieConfig";
 import { db as firestoreDB } from "@/firebase/config";
-import { doc, getDoc } from "firebase/firestore";
+import {
+  doc,
+  getDoc,
+  collection,
+  query,
+  where,
+  onSnapshot,
+} from "firebase/firestore";
 import { v4 as uuidv4 } from "uuid";
 
 /**
@@ -53,6 +60,35 @@ export const getRecommendationById = async (id) => {
     console.error("Error al buscar la recomendación en Firestore:", error);
     throw error; // Relanzamos el error para que la UI pueda manejarlo
   }
+};
+
+/**
+ * Se suscribe a las actualizaciones en tiempo real de las recomendaciones de un usuario.
+ * @param {string} userId - El ID del usuario para filtrar las recomendaciones.
+ * @param {function} callback - La función que se llamará con la lista actualizada de recomendaciones.
+ * @returns {function} Una función para cancelar la suscripción.
+ */
+export const onRecommendationsUpdate = (userId, callback) => {
+  const q = query(
+    collection(firestoreDB, "recommendations"),
+    where("userId", "==", userId)
+  );
+
+  // onSnapshot devuelve una función para "desuscribirse"
+  const unsubscribe = onSnapshot(q, (querySnapshot) => {
+    const recommendations = [];
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      recommendations.push({
+        ...data,
+        id: doc.id,
+        fecha: data.fecha.toDate(), // Convertir Timestamp a Date
+      });
+    });
+    callback(recommendations);
+  });
+
+  return unsubscribe;
 };
 
 /**
