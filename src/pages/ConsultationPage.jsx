@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { onRecommendationsUpdate, deleteRecommendation } from '@/services/api/recommendations'; // CAMBIO: Importamos la nueva función
+import { onRecommendationsUpdate, deleteRecommendation, getLocalRecommendations } from '@/services/api/recommendations'; // CAMBIO: Importamos la nueva función
 import { useAuth } from '@/hooks/useAuth';
+import { useLiveQuery } from 'dexie-react-hooks'; // 1. Importamos el hook de Dexie para datos en tiempo real
 import toast from 'react-hot-toast';
 import { ChevronDownIcon, FunnelIcon } from '@heroicons/react/24/solid';
 import { Link } from 'react-router-dom';
@@ -34,20 +35,22 @@ export function ConsultationPage() {
         'Finalizado': 'bg-green-100 text-green-800',
     };
 
-    // Efecto para la suscripción en tiempo real
+    // 2. Usamos useLiveQuery para obtener datos de Dexie en tiempo real
+    const localRecommendations = useLiveQuery(
+        () => getLocalRecommendations(user?.uid),
+        [user?.uid], // Dependencias: se vuelve a ejecutar si el user.uid cambia
+        [] // Valor inicial mientras se carga
+    );
+
+    // Efecto para la suscripción en tiempo real (ahora solo para sincronizar)
     useEffect(() => {
         if (!user) return;
 
         setLoading(true);
-        // onRecommendationsUpdate nos devuelve una función para "desuscribirnos"
-        const unsubscribe = onRecommendationsUpdate(user.uid, (recommendations) => {
-            setAllRecommendations(recommendations); // Guardamos la lista completa
-            setFilteredData(recommendations); // Inicialmente, los datos filtrados son todos los datos
-            setLoading(false);
-        });
+        // Sincronizamos con Firebase, pero la UI ya no depende directamente de esto.
+        // onRecommendationsUpdate ahora debería actualizar Dexie, y useLiveQuery se encargará del resto.
+        const unsubscribe = onRecommendationsUpdate(user.uid, () => { /* La UI ya no necesita un callback aquí */ });
 
-        // La función de limpieza de useEffect se encarga de llamar a unsubscribe
-        // cuando el componente se desmonta. Esto es CRUCIAL para evitar fugas de memoria.
         return () => unsubscribe();
     }, [user]);
 
@@ -77,7 +80,13 @@ export function ConsultationPage() {
             setFilteredData(data);
         };
         applyFilters();
-    }, [clientFilter, statusFilter, dateFromFilter, dateToFilter, allRecommendations]);
+    }, [clientFilter, statusFilter, dateFromFilter, dateToFilter, allRecommendations]); // Mantenemos allRecommendations aquí
+
+    // 3. Efecto para actualizar los estados cuando los datos locales de Dexie cambian
+    useEffect(() => {
+        setAllRecommendations(localRecommendations);
+        setLoading(false); // Dejamos de cargar una vez que tenemos datos de Dexie
+    }, [localRecommendations]);
 
     const handleClearFilters = () => {
         setClientFilter('');
