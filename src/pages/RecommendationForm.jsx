@@ -54,6 +54,7 @@ export function RecommendationForm() {
     } = useForm({
         defaultValues: {
             noHoja: '',
+            fecha: new Date().toISOString(),
             datosAgricultor: {
                 nombre: '',
                 dni: '',
@@ -121,6 +122,9 @@ export function RecommendationForm() {
                 // ¡LA SOLUCIÓN! Aseguramos que fotoDespues sea null en la creación.
                 // Firestore no acepta 'undefined', que es lo que podría estar enviando el formulario.
                 data.seguimiento.fotoDespues = null;
+
+                // La función createRecommendation se encargará de añadir el userId.
+                // No es necesario añadirlo manualmente aquí si se pasa como argumento.
 
                 // Guardar la recomendación con la imagen ya convertida
                 await createRecommendation(data, user.uid);
