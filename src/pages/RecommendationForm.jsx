@@ -123,9 +123,6 @@ export function RecommendationForm() {
                 // Firestore no acepta 'undefined', que es lo que podría estar enviando el formulario.
                 data.seguimiento.fotoDespues = null;
 
-                // ¡LA SOLUCIÓN DEFINITIVA! Usamos 'userId' para que coincida con Dexie y las consultas.
-                data.userId = user.uid;
-
                 // Guardar la recomendación con la imagen ya convertida
                 await createRecommendation(data, user.uid);
 
