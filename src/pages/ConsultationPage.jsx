@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { onRecommendationsUpdate, deleteRecommendation } from '@/services/api/recommendations'; // CAMBIO: Importamos la nueva función
-import { useAuth } from '@/hooks/useAuth'; // Asegúrate de que la ruta sea correcta
+import { useAuth } from '@/hooks/useAuth';
 import toast from 'react-hot-toast';
-import { ChevronDownIcon, FunnelIcon } from '@heroicons/react/24/solid'; // Necesitarás instalar @heroicons/react
+import { ChevronDownIcon, FunnelIcon } from '@heroicons/react/24/solid';
 import { Link } from 'react-router-dom';
 import { exportElementAsPdf } from '@/services/exportPdf.js';
 import { RecommendationPdfLayout } from '../components/RecommendationPdfLayout';
-import logo from '@/assets/logo_agrogringo.jpeg'; // Importamos el logo
-import { exportToExcel } from '@/services/excelExporter'; // ¡Importamos el nuevo exportador!
+import logo from '@/assets/logo_agrogringo.jpeg';
+import { exportToExcel } from '@/services/excelExporter';
 
 export function ConsultationPage() {
     const [allRecommendations, setAllRecommendations] = useState([]); // NUEVO: Estado para guardar TODOS los datos
@@ -100,23 +100,30 @@ export function ConsultationPage() {
 
             // 2. Función para llamar a nuestra Netlify Function y borrar una imagen.
             const deleteImage = async (imageUrl) => {
-                if (!imageUrl) return; // Si no hay URL, no hacemos nada.
+                if (!imageUrl) return;
+                let fullPublicId = 'unknown';
+                try {
+                    // Extraemos el public_id de la URL de Cloudinary.
+                    const publicIdParts = imageUrl.split('/');
+                    const publicId = publicIdParts.pop().split('.')[0];
+                    const folder = publicIdParts[publicIdParts.length - 1];
+                    fullPublicId = `${folder}/${publicId}`;
 
-                // Extraemos el public_id de la URL de Cloudinary.
-                const publicId = imageUrl.split('/').pop().split('.')[0];
-                const folder = imageUrl.split('/')[imageUrl.split('/').length - 2];
-                const fullPublicId = `${folder}/${publicId}`;
+                    // La URL de la función en Netlify es relativa a la raíz del sitio.
+                    const response = await fetch('/.netlify/functions/delete-cloudinary-image', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ publicId: fullPublicId }),
+                    });
 
-                // La URL de la función en Netlify es relativa a la raíz del sitio.
-                const response = await fetch('/.netlify/functions/delete-cloudinary-image', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ publicId: fullPublicId }),
-                });
-
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    console.warn(`No se pudo eliminar la imagen ${fullPublicId}:`, errorData.message);
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({ message: 'La respuesta de error no es un JSON válido.' }));
+                        throw new Error(errorData.message || `Error del servidor: ${response.status}`);
+                    }
+                } catch (err) {
+                    console.warn(`No se pudo eliminar la imagen ${fullPublicId} (${imageUrl}):`, err);
+                    // Opcional: podrías decidir si relanzar el error o no.
+                    // Por ahora, solo lo advertimos para que la eliminación del registro principal no se detenga.
                 }
             };
 

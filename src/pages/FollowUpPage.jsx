@@ -5,10 +5,8 @@ import { getRecommendationById, updateRecommendation } from '@/services/api/reco
 import { compressImage } from '@/utils/imageCompressor';
 import toast from 'react-hot-toast';
 import { uploadToCloudinary } from '@/services/cloudinaryUploader';
-import { deleteCloudinaryImage } from '@/services/imageDeletionService'; // 1. Importamos el servicio de eliminación
-
+import { deleteCloudinaryImage } from '@/services/imageDeletionService';
 const fasesTratamiento = ['Siembra', 'Vegetativo', 'Floración', 'Producción', 'Postcosecha', 'Cosecha', 'Otro'];
-
 
 export function FollowUpPage() {
     const { id } = useParams();

@@ -12,7 +12,7 @@ import { ProductAutocomplete } from '@/components/ProductAutocomplete';
 import { db } from '@/services/database/dexieConfig';
 import { compressImage } from '@/utils/imageCompressor';
 import logo from '@/assets/logo_agrogringo.jpeg'; // 1. Importamos el logo
-import { uploadToCloudinary } from '@/services/cloudinaryUploader'; // Importamos la nueva función
+import { uploadToCloudinary } from '@/services/cloudinaryUploader';
 
 // Datos geográficos de Ucayali
 const ucayaliData = {
@@ -92,7 +92,7 @@ export function RecommendationForm() {
         control,
         name: 'detallesProductos',
     });
-
+    // Manejo del envío del formulario
     const onSubmit = async (data) => {
         try {
             // Solo procesa la imagen si es un archivo nuevo (objeto File)
@@ -133,7 +133,7 @@ export function RecommendationForm() {
             console.error(error);
         }
     };
-
+    // Función para buscar clientes
     const handleClientSearch = useCallback(async (query) => {
         if (query.trim().length > 1) {
             setIsSearching(true);

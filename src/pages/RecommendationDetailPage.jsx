@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { getRecommendationById } from '@/services/api/recommendations';
 import toast from 'react-hot-toast';
 import { exportElementAsPdf } from '@/services/exportPdf.js';
-import logo from '@/assets/logo_agrogringo.jpeg'; // Importamos el logo
+import logo from '@/assets/logo_agrogringo.jpeg';
 import { RecommendationPdfLayout } from '../components/RecommendationPdfLayout';
 
 export function RecommendationDetailPage() {
