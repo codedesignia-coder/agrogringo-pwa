@@ -14,7 +14,8 @@ export function BottomNavbar() {
     const navigate = useNavigate();
 
     const activeLinkClass = "text-primary-600";
-    const inactiveLinkClass = "text-gray-500 hover:text-primary-600";
+    // CAMBIO: Usamos gray-600 en lugar de 500 para mejorar el contraste (Accesibilidad)
+    const inactiveLinkClass = "text-gray-600 hover:text-primary-600";
 
     const handleLogout = async () => {
         try {
@@ -37,6 +38,7 @@ export function BottomNavbar() {
                         className={({ isActive }) =>
                             `flex flex-col items-center justify-center text-center w-full transition-colors duration-200 ${isActive ? activeLinkClass : inactiveLinkClass}`
                         }
+                        aria-label={link.text} // CAMBIO: Etiqueta explícita para lectores de pantalla
                     >
                         <span className="text-2xl">{link.icon}</span>
                         <span className="text-xs font-medium">{link.text}</span>
@@ -44,7 +46,9 @@ export function BottomNavbar() {
                 ))}
                 <button
                     onClick={handleLogout}
-                    className="flex flex-col items-center justify-center text-center w-full text-gray-500 hover:text-red-600 transition-colors duration-200"
+                    // CAMBIO: Mejoramos contraste aquí también
+                    className="flex flex-col items-center justify-center text-center w-full text-gray-600 hover:text-red-600 transition-colors duration-200"
+                    aria-label="Cerrar sesión"
                 >
                     <span className="text-2xl">🚪</span>
                     <span className="text-xs font-medium">Salir</span>
