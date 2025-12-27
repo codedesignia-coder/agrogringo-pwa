@@ -55,6 +55,7 @@ export function ProductAutocomplete({ products, value, onChange, onSelect }) {
                 onFocus={handleInputChange} // Vuelve a mostrar sugerencias si hay texto
                 className="w-full p-2 border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500"
                 placeholder="Buscar producto..."
+                aria-label="Buscar producto"
                 autoComplete="off"
             />
             {showSuggestions && (

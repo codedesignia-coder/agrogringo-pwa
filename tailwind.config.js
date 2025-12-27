@@ -6,9 +6,9 @@ export default {
       colors: {
         primary: {
           50: "#f0fdf4",
-          500: "#16a34a",
-          600: "#15803d",
-          700: "#166534",
+          500: "#15803d", // Oscurecido ligeramente (antes era el valor de 600) para mejor contraste
+          600: "#166534", // Ajustamos el 600 para mantener la escala
+          700: "#14532d", // Ajustamos el 700
         },
         secondary: {
           50: "#fefce8",

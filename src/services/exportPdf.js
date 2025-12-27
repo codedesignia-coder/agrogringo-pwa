@@ -1,6 +1,3 @@
-import html2canvas from "html2canvas";
-import jsPDF from "jspdf";
-
 /**
  * Función central que convierte un elemento HTML en un objeto Canvas.
  * Esta es la base para todas las exportaciones.
@@ -13,6 +10,10 @@ async function generateCanvasFromElement(element) {
       "No se proporcionó un elemento válido para generar el canvas."
     );
   }
+
+  // Importación dinámica de html2canvas
+  const html2canvas = (await import("html2canvas")).default;
+
   return await html2canvas(element, {
     scale: 2, // Aumenta la resolución para un PDF más nítido.
     useCORS: true, // Permite cargar imágenes de otros dominios (si aplica).
@@ -32,6 +33,9 @@ async function generateCanvasFromElement(element) {
 export async function exportElementAsPdf(element, fileName) {
   const canvas = await generateCanvasFromElement(element);
   const imgData = canvas.toDataURL("image/png");
+
+  // Importación dinámica de jsPDF
+  const { default: jsPDF } = await import("jspdf");
 
   // 1. Crear una instancia inicial de jsPDF para usar sus métodos.
   const pdf = new jsPDF({
