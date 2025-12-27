@@ -117,12 +117,14 @@ export const onRecommendationsUpdate = (userId, callback) => {
  */
 export const getLocalRecommendations = async (userId) => {
   if (!userId) return [];
-  // Ordenamos por fecha para mostrar las más recientes primero
-  return db.recommendations
+
+  const recommendations = await db.recommendations
     .where("userId")
     .equals(userId)
-    .reverse()
-    .sortBy("fecha");
+    .toArray();
+
+  // Ordenamos por fecha descendente (más reciente primero)
+  return recommendations.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
 };
 
 /**
