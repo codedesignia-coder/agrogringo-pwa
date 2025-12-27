@@ -93,13 +93,46 @@ export const onRecommendationsUpdate = (userId, callback) => {
       });
     });
 
-    // Actualizamos Dexie con los datos de Firestore
-    // bulkPut es eficiente para añadir o reemplazar múltiples registros
-    if (firestoreRecs.length > 0) {
-      db.recommendations.bulkPut(firestoreRecs).catch((err) => {
-        console.error("Error al actualizar Dexie con datos de Firestore:", err);
-      });
-    }
+    // Actualizamos Dexie con inteligencia para evitar conflictos
+    db.transaction("rw", db.recommendations, async () => {
+      // 1. Actualizar o Insertar datos que vienen de la nube
+      for (const remoteRec of firestoreRecs) {
+        const localRec = await db.recommendations.get(remoteRec.id);
+
+        // PROTECCIÓN CRÍTICA:
+        // Si el registro existe localmente y tiene cambios pendientes (pending, modified, deleted),
+        // NO lo sobrescribimos con la versión de la nube. Nuestra versión local es la "verdad" actual.
+        if (
+          localRec &&
+          ["pending", "modified", "deleted"].includes(localRec.syncStatus)
+        ) {
+          continue;
+        }
+
+        // Si no hay conflicto, actualizamos Dexie con la versión de la nube
+        await db.recommendations.put(remoteRec);
+      }
+
+      // 2. Manejar borrados remotos (Si se borró en la nube, borrarlo localmente)
+      // Obtenemos todos los registros locales que creemos que están sincronizados
+      const localSyncedRecs = await db.recommendations
+        .where("userId")
+        .equals(userId)
+        .filter((rec) => rec.syncStatus === "synced")
+        .toArray();
+
+      // Creamos un Set de IDs que vienen de la nube para búsqueda rápida
+      const remoteIds = new Set(firestoreRecs.map((r) => r.id));
+
+      for (const localRec of localSyncedRecs) {
+        // Si un registro local "synced" ya no existe en la nube, lo borramos
+        if (!remoteIds.has(localRec.id)) {
+          await db.recommendations.delete(localRec.id);
+        }
+      }
+    }).catch((err) => {
+      console.error("Error al sincronizar snapshot de Firestore a Dexie:", err);
+    });
 
     // El callback original ya no es necesario para la UI, pero lo mantenemos por si se usa en otro lugar.
     if (callback) {

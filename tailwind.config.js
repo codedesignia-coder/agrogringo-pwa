@@ -12,8 +12,8 @@ export default {
         },
         secondary: {
           50: "#fefce8",
-          500: "#eab308",
-          600: "#ca8a04",
+          500: "#d97706", // Oscurecido (antes era eab308) para pasar pruebas de contraste con texto blanco
+          600: "#b45309",
         },
       },
       fontFamily: {
