@@ -123,8 +123,11 @@ export const getLocalRecommendations = async (userId) => {
     .equals(userId)
     .toArray();
 
-  // Ordenamos por fecha descendente (más reciente primero)
-  return recommendations.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+  // 1. Filtramos los que están marcados como "deleted" para que desaparezcan de la UI inmediatamente
+  // 2. Ordenamos por fecha descendente
+  return recommendations
+    .filter((rec) => rec.syncStatus !== "deleted")
+    .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
 };
 
 /**
