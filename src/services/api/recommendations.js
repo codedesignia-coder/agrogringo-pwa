@@ -7,6 +7,7 @@ import {
   query,
   where,
   onSnapshot,
+  orderBy,
 } from "firebase/firestore";
 import { v4 as uuidv4 } from "uuid";
 
@@ -69,26 +70,64 @@ export const getRecommendationById = async (id) => {
  * @returns {function} Una función para cancelar la suscripción.
  */
 export const onRecommendationsUpdate = (userId, callback) => {
+  // Si no hay ID de usuario, no hacemos nada.
+  if (!userId) return () => {};
+
   const q = query(
     collection(firestoreDB, "recommendations"),
-    where("userId", "==", userId)
+    where("userId", "==", userId),
+    orderBy("fecha", "desc") // Pedimos los datos ordenados
   );
 
-  // onSnapshot devuelve una función para "desuscribirse"
   const unsubscribe = onSnapshot(q, (querySnapshot) => {
-    const recommendations = [];
+    const firestoreRecs = [];
     querySnapshot.forEach((doc) => {
       const data = doc.data();
-      recommendations.push({
+      // Aseguramos que los datos de Firestore tengan el formato correcto para Dexie
+      firestoreRecs.push({
         ...data,
         id: doc.id,
-        fecha: data.fecha.toDate(), // Convertir Timestamp a Date
+        // Aseguramos que la fecha sea un objeto Date de JS, no un Timestamp de Firebase
+        fecha: data.fecha.toDate ? data.fecha.toDate() : new Date(data.fecha),
+        syncStatus: "synced", // Marcamos como sincronizado
       });
     });
-    callback(recommendations);
+
+    // Actualizamos Dexie con los datos de Firestore
+    // bulkPut es eficiente para añadir o reemplazar múltiples registros
+    if (firestoreRecs.length > 0) {
+      db.recommendations.bulkPut(firestoreRecs).catch((err) => {
+        console.error("Error al actualizar Dexie con datos de Firestore:", err);
+      });
+    }
+
+    // El callback original ya no es necesario para la UI, pero lo mantenemos por si se usa en otro lugar.
+    if (callback) {
+      callback(firestoreRecs);
+    }
   });
 
   return unsubscribe;
+};
+
+/**
+ * Obtiene las recomendaciones de un usuario directamente desde Dexie.
+ * @param {string} userId - El ID del usuario.
+ * @returns {Promise<Array>} Una promesa que se resuelve con la lista de recomendaciones locales.
+ */
+export const getLocalRecommendations = async (userId) => {
+  if (!userId) return [];
+
+  const recommendations = await db.recommendations
+    .where("userId")
+    .equals(userId)
+    .toArray();
+
+  // 1. Filtramos los que están marcados como "deleted" para que desaparezcan de la UI inmediatamente
+  // 2. Ordenamos por fecha descendente
+  return recommendations
+    .filter((rec) => rec.syncStatus !== "deleted")
+    .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
 };
 
 /**
@@ -96,9 +135,10 @@ export const onRecommendationsUpdate = (userId, callback) => {
  * @returns {Promise<object|null>} La última recomendación encontrada o null si no hay ninguna.
  */
 export const getLastRecommendation = async () => {
-  // Ordena las recomendaciones por fecha en orden descendente y devuelve la primera.
-  // Esto nos da el registro más reciente.
-  const lastRec = await db.recommendations.orderBy("fecha").reverse().first();
+  // Ordena todas las recomendaciones por 'noHoja' de forma descendente y toma la primera.
+  // Esto asume que 'noHoja' es numérico o un string que se ordena correctamente.
+  // Es más fiable que ordenar por fecha si se pueden crear hojas con fechas pasadas.
+  const lastRec = await db.recommendations.orderBy("noHoja").reverse().first();
   console.log("Última recomendación encontrada en Dexie:", lastRec);
   return lastRec;
 };
@@ -108,11 +148,12 @@ export const getLastRecommendation = async () => {
  * @param {object} recommendationData Los datos de la nueva recomendación.
  * @returns {Promise<string>} El ID de la recomendación creada.
  */
-export const createRecommendation = async (recommendationData) => {
+export const createRecommendation = async (recommendationData, userId) => {
   const newId = uuidv4();
   const recommendation = {
     ...recommendationData,
     id: newId,
+    userId: userId, // Aseguramos que el userId se guarde
     syncStatus: "pending", // Marcar como pendiente para sincronizar
     timestampUltimaModificacion: new Date(),
   };

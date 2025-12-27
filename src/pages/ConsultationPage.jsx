@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { onRecommendationsUpdate, deleteRecommendation } from '@/services/api/recommendations'; // CAMBIO: Importamos la nueva función
+import { onRecommendationsUpdate, deleteRecommendation, getLocalRecommendations } from '@/services/api/recommendations';
 import { useAuth } from '@/hooks/useAuth';
+import { useLiveQuery } from 'dexie-react-hooks';
 import toast from 'react-hot-toast';
 import { ChevronDownIcon, FunnelIcon } from '@heroicons/react/24/solid';
 import { Link } from 'react-router-dom';
@@ -13,8 +14,6 @@ export function ConsultationPage() {
     const [allRecommendations, setAllRecommendations] = useState([]); // NUEVO: Estado para guardar TODOS los datos
     const [filteredData, setFilteredData] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-    const { user } = useAuth();
 
     // NUEVO: id de la recomendación seleccionada para exportar
     const [selectedRecId, setSelectedRecId] = useState(null);
@@ -27,6 +26,14 @@ export function ConsultationPage() {
     const [dateToFilter, setDateToFilter] = useState('');
     const [showFilters, setShowFilters] = useState(false); // Estado para mostrar/ocultar filtros en móvil
 
+    const { user } = useAuth();
+
+    // 1. Usamos useLiveQuery para obtener datos de Dexie en tiempo real.
+    const localRecommendations = useLiveQuery(
+        () => getLocalRecommendations(user?.uid),
+        [user?.uid] // Dependencias: se vuelve a ejecutar si el user.uid cambia
+    );
+
     // Estilos para los estados, para mantener consistencia
     const estadoStyles = {
         'Pendiente': 'bg-yellow-100 text-yellow-800',
@@ -34,22 +41,23 @@ export function ConsultationPage() {
         'Finalizado': 'bg-green-100 text-green-800',
     };
 
-    // Efecto para la suscripción en tiempo real
+    // 2. Este efecto ahora solo se encarga de la sincronización en segundo plano.
     useEffect(() => {
         if (!user) return;
 
-        setLoading(true);
-        // onRecommendationsUpdate nos devuelve una función para "desuscribirnos"
-        const unsubscribe = onRecommendationsUpdate(user.uid, (recommendations) => {
-            setAllRecommendations(recommendations); // Guardamos la lista completa
-            setFilteredData(recommendations); // Inicialmente, los datos filtrados son todos los datos
-            setLoading(false);
-        });
+        // onRecommendationsUpdate ahora actualiza Dexie, y useLiveQuery se encarga del resto.
+        const unsubscribe = onRecommendationsUpdate(user.uid, null); // Ya no necesitamos el callback para la UI.
 
-        // La función de limpieza de useEffect se encarga de llamar a unsubscribe
-        // cuando el componente se desmonta. Esto es CRUCIAL para evitar fugas de memoria.
         return () => unsubscribe();
     }, [user]);
+
+    // 3. Este efecto reacciona a los cambios de la base de datos local.
+    useEffect(() => {
+        if (localRecommendations) {
+            setAllRecommendations(localRecommendations);
+            setLoading(false);
+        }
+    }, [localRecommendations]);
 
     useEffect(() => {
         // Efecto para aplicar los filtros cuando cambian los filtros o la lista maestra
@@ -208,7 +216,6 @@ export function ConsultationPage() {
     };
 
     if (loading) return <p className="p-4 text-center">Cargando recomendaciones...</p>;
-    if (error) return <p className="p-4 text-center text-red-500">{error}</p>;
 
     return (
         <div className="max-w-7xl mx-auto p-4">
