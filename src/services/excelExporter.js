@@ -1,11 +1,9 @@
-import * as XLSX from "xlsx";
-
 /**
  * Exporta una lista de recomendaciones a un archivo Excel (.xlsx).
  * @param {Array<object>} recommendations - La lista de objetos de recomendación.
  * @param {string} fileName - El nombre del archivo a generar (sin extensión).
  */
-export function exportToExcel(
+export async function exportToExcel(
   recommendations,
   fileName = "Recomendaciones_AgroGringo"
 ) {
@@ -13,6 +11,9 @@ export function exportToExcel(
     console.error("No hay datos para exportar.");
     return;
   }
+
+  // Importación dinámica: Solo carga la librería cuando se ejecuta esta función
+  const XLSX = await import("xlsx");
 
   // 1. Transformar los datos a un formato plano para la hoja de cálculo.
   const dataForSheet = recommendations.map((rec) => ({
