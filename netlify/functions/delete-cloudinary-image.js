@@ -5,7 +5,7 @@ exports.handler = async function (event, context) {
   // 1. Configurar Cloudinary con las variables de entorno seguras.
   // Debes configurar estas variables en el dashboard de tu sitio en Netlify.
   cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    cloud_name: process.env.VITE_CLOUDINARY_CLOUD_NAME,
     api_key: process.env.CLOUDINARY_API_KEY,
     api_secret: process.env.CLOUDINARY_API_SECRET,
   });
