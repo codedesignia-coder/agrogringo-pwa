@@ -88,6 +88,15 @@ export function RecommendationDetailPage() {
         'Finalizado': 'bg-green-100 text-green-800',
     };
 
+    // Helper para mostrar imágenes tanto si son URLs (online) como Blobs (offline)
+    const getImageUrl = (img) => {
+        if (!img) return null;
+        if (img instanceof Blob || img instanceof File) {
+            return URL.createObjectURL(img);
+        }
+        return img;
+    };
+
     return (
         <div className="max-w-4xl p-4 mx-auto">
             {/* 5. Renderizar el layout del PDF fuera de la pantalla para poder capturarlo */}
@@ -156,7 +165,7 @@ export function RecommendationDetailPage() {
                             <div className="mt-4">
                                 <h3 className="font-semibold text-sm mb-2">Foto del Cultivo (Antes):</h3>
                                 <img
-                                    src={seguimiento.fotoAntes}
+                                    src={getImageUrl(seguimiento.fotoAntes)}
                                     alt="Foto del cultivo antes del tratamiento"
                                     className="rounded-lg border max-w-sm mx-auto"
                                 />
@@ -172,7 +181,7 @@ export function RecommendationDetailPage() {
                                 <div className="mt-4">
                                     <h3 className="font-semibold text-sm mb-2">Foto del Cultivo (Después):</h3>
                                     <img
-                                        src={seguimiento.fotoDespues}
+                                        src={getImageUrl(seguimiento.fotoDespues)}
                                         alt="Foto del cultivo después del tratamiento"
                                         className="rounded-lg border max-w-sm mx-auto"
                                     />
