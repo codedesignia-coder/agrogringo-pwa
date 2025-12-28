@@ -12,7 +12,6 @@ import { ProductAutocomplete } from '@/components/ProductAutocomplete';
 import { db } from '@/services/database/dexieConfig';
 import { compressImage } from '@/utils/imageCompressor';
 import logo from '@/assets/logo_agrogringo.jpeg'; // 1. Importamos el logo
-import { uploadToCloudinary } from '@/services/cloudinaryUploader';
 
 // Datos geográficos de Ucayali
 const ucayaliData = {
@@ -101,9 +100,9 @@ export function RecommendationForm() {
                 const originalFile = data.seguimiento.fotoAntes[0];
                 // Comprimimos la imagen
                 const compressedBlob = await compressImage(originalFile);
-                // La subimos a Cloudinary y obtenemos la URL
-                const imageUrl = await uploadToCloudinary(compressedBlob);
-                data.seguimiento.fotoAntes = imageUrl; // Guardamos la URL en lugar del base64
+                // CAMBIO OFFLINE: Guardamos el archivo (Blob) localmente.
+                // El syncManager se encargará de subirlo a Cloudinary cuando detecte internet.
+                data.seguimiento.fotoAntes = compressedBlob;
             }
 
             if (isEditMode) {

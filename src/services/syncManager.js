@@ -9,6 +9,7 @@ import {
 } from "firebase/firestore";
 import toast from "react-hot-toast";
 import { deleteCloudinaryImage } from "./imageDeletionService"; // 1. Importamos el servicio de eliminación
+import { uploadToCloudinary } from "./cloudinaryUploader";
 
 /**
  * Función de limpieza recursiva.
@@ -75,6 +76,12 @@ export const runSync = async () => {
     return;
   }
 
+  // Evitamos errores si no hay internet: la sincronización se intentará luego.
+  if (!navigator.onLine) {
+    console.log("📴 Sin conexión. Sincronización pausada.");
+    return;
+  }
+
   isSyncing = true;
   console.log("🚀 Iniciando sincronización...");
   const toastId = toast.loading("Sincronizando datos pendientes...");
@@ -93,6 +100,50 @@ export const runSync = async () => {
 
     for (const rec of pendingRecs) {
       if (rec.syncStatus === "pending" || rec.syncStatus === "modified") {
+        // --- LÓGICA DE SUBIDA DE IMÁGENES OFFLINE ---
+        // Verificamos si hay imágenes guardadas localmente (Blobs) que necesitan subirse
+        let imageUpdates = {};
+        let hasImageUpdates = false;
+
+        // 1. Imagen Principal
+        if (rec.imageUrl instanceof Blob) {
+          const url = await uploadToCloudinary(rec.imageUrl);
+          rec.imageUrl = url; // Actualizamos el objeto en memoria para enviarlo a Firestore
+          imageUpdates.imageUrl = url; // Preparamos la actualización para Dexie
+          hasImageUpdates = true;
+        }
+
+        // 2. Imágenes de Seguimiento (Antes/Después)
+        if (rec.seguimiento) {
+          let seguimientoUpdates = { ...rec.seguimiento };
+          let segChanged = false;
+
+          if (rec.seguimiento.fotoAntes instanceof Blob) {
+            const url = await uploadToCloudinary(rec.seguimiento.fotoAntes);
+            rec.seguimiento.fotoAntes = url;
+            seguimientoUpdates.fotoAntes = url;
+            segChanged = true;
+          }
+
+          if (rec.seguimiento.fotoDespues instanceof Blob) {
+            const url = await uploadToCloudinary(rec.seguimiento.fotoDespues);
+            rec.seguimiento.fotoDespues = url;
+            seguimientoUpdates.fotoDespues = url;
+            segChanged = true;
+          }
+
+          if (segChanged) {
+            imageUpdates.seguimiento = seguimientoUpdates;
+            hasImageUpdates = true;
+          }
+        }
+
+        // Si subimos imágenes, actualizamos Dexie inmediatamente con las URLs reales
+        if (hasImageUpdates) {
+          await db.recommendations.update(rec.id, imageUpdates);
+        }
+        // ---------------------------------------------
+
         await createFirestoreRecommendation(rec); // setDoc maneja creación y sobreescritura
         await db.recommendations.update(rec.id, { syncStatus: "synced" });
       } else if (rec.syncStatus === "deleted") {
@@ -130,7 +181,7 @@ export const runSync = async () => {
     );
   } catch (error) {
     console.error("❌ Error durante la sincronización:", error);
-    toast.error("Error durante la sincronización. Revisa la consola.", {
+    toast.error(`Error sync: ${error.message}`, {
       id: toastId,
     });
   } finally {
